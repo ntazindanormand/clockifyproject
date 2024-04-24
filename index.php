@@ -11,10 +11,10 @@
     <div class="task-container">
         <div class="filters">
             <label for="project">Select Project:</label>
-            <select name="project" id="project"></select>
+            <select name="project" id="project" class="project"></select>
 
             <label for="task">Select Task:</label>
-            <select name="task" id="tasks"></select>
+            <select name="task" id="tasks" class ="tasks"></select>
 
             <label for="user">Choose User:</label>
             <select name="user" id="user"></select>
@@ -33,6 +33,8 @@
             <input type="hidden" name="clockify_task_id" id="clockify_task_id">
             <input type="hidden" name="clockify_workspace_id" id="clockify_workspace_id">
             <input type="hidden" name="priority" id="priority" value="">
+            <input type="hidden" class="task-id" value="${task.id}">
+
 
             <button type="submit" id="addTaskBtn">ADD TASK</button>
         </div>
