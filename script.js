@@ -80,19 +80,51 @@ async function fetchWorkspaceId(apiKey) {
         return null;
     }
 }
-function addTaskRow(task) {
+async function addTaskRow(task) {
     // Check if task date properties are defined and valid
     const date_created = task.date_created ? task.date_created.split(' ')[0] : ''; // Extract date part and handle undefined
     const due_date = task.due_date ? task.due_date.split(' ')[0] : ''; // Extract date part and handle undefined
 
-    // Generate a unique ID for priority dropdown
+    // Generate unique IDs for priority dropdown and task dropdown
     const priorityId = `priority-${Math.random().toString(36).substr(2, 9)}`;
+    const taskId = `task-${Math.random().toString(36).substr(2, 9)}`;
+
+    // Fetch project name based on clockify_project_id
+    const projectResponse = await fetch(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/projects/${task.clockify_project_id}`, {
+        method: 'GET',
+        headers: { 'X-Api-Key': apiKey }
+    });
+    const projectData = await projectResponse.json();
+    const projectName = projectData ? projectData.name : 'Unknown Project';
+
+    // Fetch task name based on clockify_task_id
+    const taskResponse = await fetch(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/projects/${task.clockify_project_id}/tasks/${task.clockify_task_id}`, {
+        method: 'GET',
+        headers: { 'X-Api-Key': apiKey }
+    });
+    const taskData = await taskResponse.json();
+    const taskName = taskData ? taskData.name : 'Unknown Task';
+
+    // Fetch usernames based on user IDs
+    const createdUserResponse = await fetch('https://api.clockify.me/api/v1/user', {
+        method: 'GET',
+        headers: { 'X-Api-Key': apiKey }
+    });
+    const createdUserData = await createdUserResponse.json();
+    const createdBy = createdUserData ? createdUserData.name : 'Unknown User';
+
+    const assignedUserResponse = await fetch('https://api.clockify.me/api/v1/user', {
+        method: 'GET',
+        headers: { 'X-Api-Key': apiKey }
+    });
+    const assignedUserData = await assignedUserResponse.json();
+    const assignedTo = assignedUserData ? assignedUserData.name : 'Unknown User';
 
     const newRowElement = document.createElement('tr');
     newRowElement.innerHTML = `
         <td><input type="date" name="date_created" value="${date_created}" style="border: none;"></td>
-        <td>${task.project_name}</td>
-        <td>${task.task_name}</td>
+        <td>${projectName}</td>
+        <td>${taskName}</td> <!-- Display task name here -->
         <td><input type="text" name="description" value="${task.description || ''}"></td>
         <td><button class="up">↑</button><button class="down">↓</button></td>
         <td><input type="date" name="due_date" value="${due_date}" style="border: none;"></td>
@@ -101,8 +133,8 @@ function addTaskRow(task) {
             <option value="2">Normal</option>
             <option value="3">Low</option>
         </select></td>
-        <td>${task.created_by || ''}</td>
-        <td>${task.assigned_to || ''}</td>
+       <td>${createdBy}</td> <!-- Display created by user here -->
+        <td>${assignedTo}</td> <!-- Display assigned to user here -->
         <td><select name="task-status"><option value="In Progress">In Progress</option><option value="Completed">Completed</option><option value="Review">Review</option></select></td>
         <td class="timer"><div><button class="start">Start</button><button class="stop" style="display: none;">Stop</button></div></td>
         <td class="timer-display">00:00:00</td>
@@ -117,15 +149,15 @@ function addTaskRow(task) {
         document.getElementById(priorityId).value = this.value;
     });
 
-    // Add event listeners for buttons
     newRowElement.querySelector('.start').addEventListener('click', function() {
-        currentTimer = startTimer(newRowElement);
+        startTimer(newRowElement);
     });
 
     newRowElement.querySelector('.stop').addEventListener('click', function() {
         const rowElement = this.closest('tr');
-        stopCurrentTimer(rowElement);
+        stopTimer(rowElement); // Change this line from stopCurrentTimer to stopTimer
     });
+
 
     newRowElement.querySelector('.delete').addEventListener('click', function() {
         deleteTask(newRowElement);
@@ -136,20 +168,17 @@ function addTaskRow(task) {
 
 
 document.getElementById('addTaskBtn').addEventListener('click', addTaskRow);
-
 function startTimer(rowElement) {
     // Ensure no other timers are running
-    stopCurrentTimer();
+    stopTimer(rowElement);
 
     const startButton = rowElement.querySelector('.start');
     const stopButton = rowElement.querySelector('.stop');
     const projectId = projectDropdown.value;
     const taskId = taskDropdown.value;
-    // Use stopButton to control display
-    startButton.style.display = 'none';
-    stopButton.style.display = 'inline';
+    const userId = userDropdown.value; // Retrieve the user ID from the dropdown
 
-    let timerInterval; // Variable to hold the timer interval
+    console.log('Starting timer...'); // Debug message
 
     fetch(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/time-entries`, {
         method: 'POST',
@@ -161,6 +190,7 @@ function startTimer(rowElement) {
             start: new Date().toISOString(),
             projectId: projectId,
             taskId: taskId,
+            userId: userId, // Include the user ID
             billable: 'true'
         })
     })
@@ -171,38 +201,34 @@ function startTimer(rowElement) {
             return response.json();
         })
         .then(data => {
+            console.log('Data received from Clockify:', data); // Debugging message
             if (!data.id) {
                 throw new Error('Failed to retrieve time entry ID');
             }
+            console.log('Timer started successfully'); // Debugging message
             startButton.style.display = 'none';
             stopButton.style.display = 'inline';
             rowElement.dataset.timeEntryId = data.id; // Store the time entry ID
-
             let seconds = 0;
-            timerInterval = setInterval(() => {
+            const timerInterval = setInterval(() => {
                 seconds++;
                 const hours = Math.floor(seconds / 3600);
                 const minutes = Math.floor((seconds % 3600) / 60);
                 const secondsLeft = seconds % 60;
                 rowElement.querySelector('.timer-display').textContent = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secondsLeft).padStart(2, '0')}`;
             }, 1000);
+
+            // Store the interval in a data attribute for later use
+            rowElement.dataset.timerInterval = timerInterval;
         })
         .catch(error => {
             console.error('Error starting timer on Clockify:', error);
             // Optionally, you can display an error message to the user
             // alert('Failed to start timer. Please try again later.');
         });
-
-    // Return the time entry ID and the stop function
-    return {
-        stop: () => {
-            clearInterval(timerInterval); // Stop the timer interval
-            stopButton.style.display = 'none'; // Hide the stop button
-        }
-    };
 }
 
-function stopCurrentTimer(rowElement) {
+function stopTimer(rowElement) {
     console.log("Stopping timer..."); // Debugging statement
     if (!rowElement) {
         console.log("No row element provided."); // Debugging statement
@@ -210,15 +236,19 @@ function stopCurrentTimer(rowElement) {
     }
 
     const stopButton = rowElement.querySelector('.stop');
-    const timeEntryId = rowElement.dataset.timeEntryId; // Get the time entry ID
+    const timeEntryId = rowElement.dataset.timeEntryId; // Get the time entry ID from the dataset
+    const userId = userDropdown.value; // Retrieve the user ID from the dropdown
 
     console.log("Time entry ID:", timeEntryId); // Debugging statement
 
-    const userId = userDropdown.value; // Retrieve the user ID
+    if (!userId) {
+        console.error('User ID is empty');
+        return;
+    }
 
     // Use stopButton to control display
     stopButton.style.display = 'inline';
-
+    console.log(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/user/${userId}/time-entries`);
     fetch(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/user/${userId}/time-entries`, {
         method: 'PATCH',
         headers: {
@@ -226,7 +256,8 @@ function stopCurrentTimer(rowElement) {
             'X-Api-Key': apiKey
         },
         body: JSON.stringify({
-            end: new Date().toISOString() // Set the end time to the current time
+            end: new Date().toISOString(), // Set the end time to the current time
+            id: timeEntryId // Include the time entry ID in the request
         })
     })
         .then(response => {
@@ -242,10 +273,12 @@ function stopCurrentTimer(rowElement) {
         });
 }
 
+
 function moveUp() {
     const row = this.closest('tr');
     if (row.previousElementSibling) {
         row.parentNode.insertBefore(row, row.previousElementSibling);
+        updateSortOrder();
     }
 }
 
@@ -253,7 +286,15 @@ function moveDown() {
     const row = this.closest('tr');
     if (row.nextElementSibling) {
         row.parentNode.insertBefore(row.nextElementSibling, row);
+        updateSortOrder();
     }
+}
+
+function updateSortOrder() {
+    const priorityDropdowns = document.querySelectorAll('select[name="priority"]');
+    priorityDropdowns.forEach((dropdown, index) => {
+        dropdown.value = index + 1;
+    });
 }
 
 function deleteTask(row) {
@@ -281,13 +322,13 @@ document.getElementById('Data').addEventListener('submit', async function(event)
     document.getElementById('clockify_workspace_id').value = workspaceId;
 
     // Create JSON object from FormData
+    const formData = new FormData(this);
     const data = {};
     for (const [key, value] of formData.entries()) {
         data[key] = value;
     }
 
     console.log('JSON data to be sent:', data);
-
 
     // Send form data to the server
     fetch('database.php', {
@@ -313,6 +354,7 @@ document.getElementById('Data').addEventListener('submit', async function(event)
         });
 })
 
+
 // fetching records
 document.addEventListener('DOMContentLoaded', function() {
     fetchTasksFromServer();
@@ -328,6 +370,7 @@ function fetchTasksFromServer() {
         .then(responseData => {
 
             const tasks = JSON.parse(responseData).data; // Attempt to parse JSON
+            console.log(tasks); // Debugging statement
             if (!Array.isArray(tasks)) {
                 throw new Error('Tasks is not an array');
             }

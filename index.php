@@ -64,7 +64,70 @@
 </table>
 
 <div id="recordsContainer"></div>
+<script>
+    // Function to save task and priority
+    async function saveTaskAndPriority(taskData) {
+        try {
+            // Save task in main task table
+            const taskResponse = await fetch('save_task.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(taskData)
+            });
+            const { taskId } = await taskResponse.json();
+
+            // Save priority in task_priority table
+            const priorityResponse = await fetch('save_priority.php', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ id: taskData.priorityId, name: taskData.priorityName })
+            });
+            const { priorityId } = await priorityResponse.json();
+
+            return { taskId, priorityId };
+        } catch (error) {
+            console.error('Error saving task and priority:', error);
+            throw error;
+        }
+    }
+
+    // Event listener for form submission
+    document.getElementById('Data').addEventListener('submit', async function(event) {
+        event.preventDefault(); // Prevent the default form submission behavior
+
+        // Assuming 'priority' is the name attribute of your priority dropdown
+        const priorityDropdown = document.querySelector('select[name="priority"]');
+        const selectedPriorityId = priorityDropdown.value;
+        const selectedPriorityName = priorityDropdown.options[priorityDropdown.selectedIndex].text;
+
+        // Other form data
+        const formData = new FormData(this);
+        const taskData = {};
+        for (const [key, value] of formData.entries()) {
+            taskData[key] = value;
+        }
+
+        // Add priority ID and name to task data
+        taskData.priorityId = selectedPriorityId;
+        taskData.priorityName = selectedPriorityName;
+
+        try {
+            // Save task and priority
+            const { taskId, priorityId } = await saveTaskAndPriority(taskData);
+            console.log('Task ID:', taskId);
+            console.log('Priority ID:', priorityId);
+            // Optionally, display a success message to the user
+        } catch (error) {
+            // Optionally, display an error message to the user
+        }
+    });
+
+</script>
+
 <script src="script.js"></script>
-<!--<script src="clockifyAPI.js"></script> -->
 </body>
 </html>
