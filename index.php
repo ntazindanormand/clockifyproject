@@ -66,7 +66,7 @@
 </table>
 
 <div id="recordsContainer"></div>
-<script>
+<!--<script>
     // Function to save task and priority
     async function saveTaskAndPriority(taskData) {
         try {
@@ -129,6 +129,8 @@
     });
 
 </script>
+
+-->
 
 <script src="script.js"></script>
 </body>

@@ -10,18 +10,22 @@ function connectDatabase(): SQLite3
 }
 
 // Function to fetch tasks from the database
-function fetchTasks($db): array
-{
-    $result = $db->query('SELECT t.*, 
-                                tp.name AS priority_name, 
-                                ts.name AS status_name
-                         FROM task t 
-                         LEFT JOIN task_priority tp ON t.task_priority_id = tp.id
-                         LEFT JOIN task_status ts ON t.task_status_id = ts.id
-                         ORDER BY t.date_created DESC');
+function fetchTasks($db): array {
+    $query = 'SELECT t.*, 
+                     tp.name AS priority_name, 
+                     ts.name AS status_name
+              FROM task t 
+              LEFT JOIN task_priority tp ON t.task_priority_id = tp.id
+              LEFT JOIN task_status ts ON t.task_status_id = ts.id
+              ORDER BY t.date_created DESC';
+
+    $result = $db->query($query);
+    if (!$result) {
+        throw new Exception("Database query failed: " . $db->lastErrorMsg());
+    }
+
     $tasks = [];
     while ($row = $result->fetchArray(SQLITE3_ASSOC)) {
-        // Include project name
         $row['project_name'] = getProjectName($row['clockify_project_id'], $db);
         $tasks[] = $row;
     }
@@ -30,11 +34,29 @@ function fetchTasks($db): array
 
 // Function to retrieve project name based on project ID
 function getProjectName($projectId, $db) {
-    // Fetch project name from the task table based on project ID
-    $query = "SELECT name FROM task WHERE id = $projectId";
+    $query = "SELECT name FROM projects WHERE id = $projectId";  // Adjust table and column names as necessary
     $result = $db->querySingle($query);
-    return $result ? $result : 'Unknown Project'; // Default to 'Unknown Project' if not found
+    return $result ? $result : 'Unknown Project';
 }
+
+// Function to update sort order of tasks
+function updateSortOrder($db, $tasks) {
+    try {
+        foreach ($tasks as $index => $task) {
+            $taskId = $task['task']; // Get task ID
+            $sortOrder = $index + 1; // Calculate new sort order
+            $stmt = $db->prepare('UPDATE task SET sort_order = :sortOrder WHERE id = :taskId');
+            $stmt->bindParam(':sortOrder', $sortOrder, SQLITE3_INTEGER);
+            $stmt->bindParam(':taskId', $taskId, SQLITE3_INTEGER);
+            if (!$stmt->execute()) {
+                throw new Exception('Failed to update sort order for task ID: ' . $taskId);
+            }
+        }
+    } catch (Exception $e) {
+        throw new Exception('Error updating sort order: ' . $e->getMessage());
+    }
+}
+
 
 // Handle POST requests to add a task
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -45,7 +67,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         echo json_encode(['status' => 'error', 'message' => 'Received empty JSON data']);
         exit;
     }
-
     // Debug statement to log decoded JSON data
     var_dump($json_data);
 
@@ -61,8 +82,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $db = connectDatabase();
 
         // Prepare SQL statement for priority insertion
-        $priorityStmt = $db->prepare('INSERT OR IGNORE INTO task_priority (name) VALUES (:priorityName)');
-        $priorityStmt->bindValue(':priorityName', $form_data['priorityName'], SQLITE3_TEXT);
+        $priorityStmt = $db->prepare('INSERT OR IGNORE INTO task_priority (name) VALUES (?)');
+        if (!$priorityStmt) {
+            throw new Exception('Failed to prepare priority statement');
+        }
+        // Update sort order if applicable
+        if (isset($form_data['sort_order'])) {
+            updateSortOrder($db, $form_data['sort_order']);
+        }
+
+
+        // Bind parameter for priority insertion
+        $priorityStmt->bindValue(1, $form_data['priorityName']);
 
         // Execute priority insertion statement
         if (!$priorityStmt->execute()) {
@@ -73,16 +104,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $priorityId = $db->lastInsertRowID();
 
         // Prepare SQL statement for task insertion
-        $taskStmt = $db->prepare('INSERT INTO task (description, date_created, due_date, task_priority_id, sort_order, task_status_id, clockify_project_id, clockify_task_id, clockify_workspace_id) VALUES (:description, :date_created, :due_date, :priorityId, :sort_order, :task_status_id, :clockify_project_id, :clockify_task_id, :clockify_workspace_id)');
-        $taskStmt->bindValue(':description', $form_data['description'], SQLITE3_TEXT);
-        $taskStmt->bindValue(':date_created', $form_data['date_created'], SQLITE3_TEXT);
-        $taskStmt->bindValue(':due_date', $form_data['due_date'], SQLITE3_TEXT);
-        $taskStmt->bindValue(':priorityId', $priorityId, SQLITE3_INTEGER);
-        $taskStmt->bindValue(':sort_order', $form_data['sort_order'], SQLITE3_INTEGER);
-        $taskStmt->bindValue(':task_status_id', $form_data['task_status_id'], SQLITE3_INTEGER);
-        $taskStmt->bindValue(':clockify_project_id', $form_data['clockify_project_id'], SQLITE3_TEXT);
-        $taskStmt->bindValue(':clockify_task_id', $form_data['clockify_task_id'], SQLITE3_TEXT);
-        $taskStmt->bindValue(':clockify_workspace_id', $form_data['clockify_workspace_id'], SQLITE3_TEXT);
+        $taskStmt = $db->prepare('INSERT INTO task (description, date_created, due_date, task_priority_id, created_by, assigned_to, sort_order, task_status_id, clockify_project_id, clockify_task_id, clockify_workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        if (!$taskStmt) {
+            throw new Exception('Failed to prepare task statement');
+        }
+
+        // Bind parameters for task insertion
+        $taskStmt->bindValue(1, $form_data['description']);
+        $taskStmt->bindValue(2, $form_data['date_created']);
+        $taskStmt->bindValue(3, $form_data['due_date']);
+        $taskStmt->bindValue(4, $priorityId); // Use the priority ID
+        $taskStmt->bindValue(5, $form_data['created_by']);
+        $taskStmt->bindValue(6, $form_data['assigned_to']);
+        $taskStmt->bindValue(7, $form_data['sort_order']);
+        $taskStmt->bindValue(8, $form_data['task_status_id']);
+        $taskStmt->bindValue(9, $form_data['clockify_project_id']);
+        $taskStmt->bindValue(10, $form_data['clockify_task_id']);
+        $taskStmt->bindValue(11, $form_data['clockify_workspace_id']);
 
         // Execute the task insertion statement
         if (!$taskStmt->execute()) {
@@ -107,6 +145,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     exit;
 }
 
+
 // Handle GET requests to fetch tasks
 if ($_SERVER["REQUEST_METHOD"] == "GET") {
     try {
@@ -130,4 +169,3 @@ if ($_SERVER["REQUEST_METHOD"] == "GET") {
     }
     exit;
 }
-
