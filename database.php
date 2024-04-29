@@ -57,7 +57,6 @@ function updateSortOrder($db, $tasks) {
     }
 }
 
-
 // Handle POST requests to add a task
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Process JSON input
@@ -67,8 +66,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         echo json_encode(['status' => 'error', 'message' => 'Received empty JSON data']);
         exit;
     }
-    // Debug statement to log decoded JSON data
-    var_dump($json_data);
 
     $form_data = json_decode($json_data, true);
     if ($form_data === null) {
@@ -86,11 +83,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if (!$priorityStmt) {
             throw new Exception('Failed to prepare priority statement');
         }
+
         // Update sort order if applicable
         if (isset($form_data['sort_order'])) {
             updateSortOrder($db, $form_data['sort_order']);
         }
 
+        // If UserId is not defined, use created_by value from form data
+        $UserId = isset($form_data['UserId']) ? $form_data['UserId'] : $form_data['created_by'];
 
         // Bind parameter for priority insertion
         $priorityStmt->bindValue(1, $form_data['priorityName']);
@@ -102,30 +102,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         // Get the priority ID (either newly inserted or existing)
         $priorityId = $db->lastInsertRowID();
-
-        // Prepare SQL statement for task insertion
+// Prepare SQL statement for task insertion
         $taskStmt = $db->prepare('INSERT INTO task (description, date_created, due_date, task_priority_id, created_by, assigned_to, sort_order, task_status_id, clockify_project_id, clockify_task_id, clockify_workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
         if (!$taskStmt) {
             throw new Exception('Failed to prepare task statement');
         }
 
-        // Bind parameters for task insertion
+// Count existing tasks to determine sort order for the new task
+        $existingTasksCount = $db->querySingle('SELECT COUNT(*) FROM task');
+        $newSortOrder = $existingTasksCount + 1; // Increment by 1 for the new task
+
+// Bind parameters for task insertion
         $taskStmt->bindValue(1, $form_data['description']);
         $taskStmt->bindValue(2, $form_data['date_created']);
         $taskStmt->bindValue(3, $form_data['due_date']);
         $taskStmt->bindValue(4, $priorityId); // Use the priority ID
         $taskStmt->bindValue(5, $form_data['created_by']);
         $taskStmt->bindValue(6, $form_data['assigned_to']);
-        $taskStmt->bindValue(7, $form_data['sort_order']);
+        $taskStmt->bindValue(7, $newSortOrder); // Use the new sort order
         $taskStmt->bindValue(8, $form_data['task_status_id']);
         $taskStmt->bindValue(9, $form_data['clockify_project_id']);
         $taskStmt->bindValue(10, $form_data['clockify_task_id']);
         $taskStmt->bindValue(11, $form_data['clockify_workspace_id']);
 
-        // Execute the task insertion statement
+// Execute the task insertion statement
         if (!$taskStmt->execute()) {
             throw new Exception('Failed to execute task statement');
         }
+
 
         // Fetch updated list of tasks
         $tasks = fetchTasks($db);

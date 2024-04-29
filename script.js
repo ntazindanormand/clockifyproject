@@ -1,5 +1,8 @@
+let UserId;
 document.addEventListener('DOMContentLoaded', function() {
+
     fetchProjects();
+    fetchUsers();
 });
 
 const apiKey = 'NTNlOTEyNWQtOGI2Yy00MjMzLTgxMDEtYzU1ZjBkOGU3NjIz';
@@ -8,7 +11,6 @@ const workspaceId = '66016daed4084c6ca1059c4b';
 const projectDropdown = document.getElementById('project');
 const taskDropdown = document.getElementById('tasks');
 const userDropdown = document.getElementById('user');
-
 
 function fetchProjects() {
     fetch(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/projects/`, {
@@ -44,17 +46,33 @@ function fetchTasks(projectId) {
 }
 
 function fetchUsers() {
-    userDropdown.innerHTML = '<option value="">Select User</option>';
+    // Fetch user data
     fetch(`https://api.clockify.me/api/v1/user`, {
         method: 'GET',
         headers: { 'X-Api-Key': apiKey }
     })
-        .then(response => response.json())
-        .then(data => {
-            let option = new Option(data.name, data.id);
-            userDropdown.add(option);
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to fetch user data');
+            }
+            return response.json();
         })
-        .catch(error => console.error('Error fetching users:', error));
+        .then(user => {
+            // Assign the user ID to the global UserId variable
+            UserId = user.id;
+            console.log('User ID:', UserId); // Log the user ID
+
+            // Populate user dropdown
+            const userDropdown = document.getElementById('user');
+            userDropdown.innerHTML = ''; // Clear previous options
+            const option = new Option(user.name, user.id);
+            userDropdown.add(option);
+
+            // Handle additional logic related to the user data here
+
+            // Add other logic as needed
+        })
+        .catch(error => console.error('Error fetching user:', error));
 }
 
 projectDropdown.addEventListener('change', function() {
@@ -82,8 +100,16 @@ async function fetchWorkspaceId(apiKey) {
     }
 }
 
-async function addTaskRow(task, workspaceId) {
+async function addTaskRow(task, workspaceId, UserId) {
     try {
+        // Fetch user data
+        const userResponse = await fetch(`https://api.clockify.me/api/v1/user/`, {
+            method: 'GET',
+            headers: { 'X-Api-Key': apiKey }
+        });
+        const userData = await userResponse.json();
+        const userName = userData ? userData.name : 'Unknown User';
+
         // Fetch project data
         const projectResponse = await fetch(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/projects/${task.clockify_project_id}`, {
             method: 'GET',
@@ -99,41 +125,28 @@ async function addTaskRow(task, workspaceId) {
         });
         const taskData = await taskResponse.json();
         const taskName = taskData ? taskData.name : 'Unknown Task';
-          // fetch created by data
-        const createdUserResponse = await fetch('https://api.clockify.me/api/v1/user', {
-            method: 'GET',
-            headers: { 'X-Api-Key': apiKey }
-        });
-        const createdUserData = await createdUserResponse.json();
-        const createdBy = createdUserData ? createdUserData.name : 'Unknown User';
-
-                 //fetch assigned to Data
-        const assignedUserResponse = await fetch('https://api.clockify.me/api/v1/user', {
-            method: 'GET',
-            headers: { 'X-Api-Key': apiKey }
-        });
-        const assignedUserData = await assignedUserResponse.json();
-        const assignedTo = assignedUserData ? assignedUserData.name : 'Unknown User';
-
 
         const dateCreated = task.date_created ? task.date_created.split(' ')[0] : '';
         const dueDate = task.due_date ? task.due_date.split(' ')[0] : '';
+
+        // Fetch the current number of tasks in the table
+        const taskTableBody = document.querySelector('.task-table tbody');
+        const sortOrder = taskTableBody.children.length + 1;
 
         const newRow = document.createElement('tr');
 
         newRow.dataset.clockifyProjectId = task.clockify_project_id;
         newRow.dataset.clockifyTaskId = task.clockify_task_id;
         newRow.dataset.workspaceId = workspaceId;
+        newRow.dataset.UserId = UserId;
         newRow.innerHTML = `
             <td><input type="date" name="date_created" value="${dateCreated}" style="border: none;"></td>
-           <td><select name="project">
-           <option value="${task.name}">${projectName}</option>
-           </select></td>
-
+            <td><select name="project">
+                <option value="${task.clockify_project_id}">${projectName}</option>
+            </select></td>
             <td><select name="task">
-           <option value="${task.name}">${taskName}</option>
-           </select></td>
-
+                <option value="${task.clockify_task_id}">${taskName}</option>
+            </select></td>
             <td><input type="text" name="description" value="${task.description || ''}"></td>
             <td><button class="up">↑</button><button class="down">↓</button></td>
             <td><input type="date" name="due_date" value="${dueDate}" style="border: none;"></td>
@@ -142,13 +155,12 @@ async function addTaskRow(task, workspaceId) {
                 <option value="2">Normal</option>
                 <option value="3">Low</option>
             </select></td>
-          <td><select name="created_by">
-           <option value="${task.created_by}">${createdBy}</option>
-           </select></td>
-           <td><select name="assigned_to">
-          <option value="${task.assigned_to}">${assignedTo}</option>
-          </select></td>
-
+            <td><select name="created_by">
+                <option value="${UserId}">${userName}</option>
+            </select></td>
+            <td><select name="assigned_to">
+                <option value="${UserId}">${userName}</option>
+            </select></td>
             <td><select name="task-status">
                 <option value="In Progress">In Progress</option>
                 <option value="Completed">Completed</option>
@@ -158,12 +170,17 @@ async function addTaskRow(task, workspaceId) {
             <td class="timer-display">00:00:00</td>
             <td><button class="delete">Delete</button></td>
         `;
-        const taskTableBody = document.querySelector('.task-table tbody');
+
+        // Include sort order in the row
+        newRow.dataset.sortOrder = sortOrder;
+
+        // Append the new row to the table
         taskTableBody.appendChild(newRow);
 
-
+        // Add event listeners for buttons in the new row
         newRow.querySelector('.start').addEventListener('click', function() {
-            startTimer(newRow);
+            const UserId = newRow.dataset.UserId; // Retrieve UserId from the dataset of the row
+            startTimer(newRow, UserId); // Pass UserId when starting the timer
         });
 
         newRow.querySelector('.stop').addEventListener('click', function() {
@@ -177,11 +194,12 @@ async function addTaskRow(task, workspaceId) {
         newRow.querySelector('.up').addEventListener('click', moveUp);
         newRow.querySelector('.down').addEventListener('click', moveDown);
 
+        // Update sort order in the table
+        updateSortOrder();
     } catch (error) {
         console.error('Error adding task row:', error);
     }
 }
-
 
 document.getElementById('addTaskBtn').addEventListener('click', async function() {
     const workspaceId = await fetchWorkspaceId(apiKey); // Fetch workspaceId
@@ -189,9 +207,9 @@ document.getElementById('addTaskBtn').addEventListener('click', async function()
         console.error('Failed to fetch workspace ID');
         return;
     }
-    addTaskRow(task, workspaceId); // Pass workspaceId as an argument
+    const UserId = document.getElementById('user').value; // Retrieve UserId from the user dropdown
+    console.log('User ID:', UserId); // Log the user ID
 });
-
 
 function moveUp() {
     const row = this.closest('tr');
@@ -220,9 +238,12 @@ function deleteTask(row) {
     row.remove();
 }
 
+
 let timerInterval;
 
 async function startTimer(row) {
+    console.log('Row dataset:', JSON.stringify(row.dataset));
+
     const projectId = row.dataset.clockifyProjectId;
     const taskId = row.dataset.clockifyTaskId;
     const description = row.querySelector('input[name="description"]').value; // Retrieve description from input field
@@ -238,9 +259,18 @@ async function startTimer(row) {
     row.dataset.clockifyTaskId = taskId;
     const workspaceId = row.dataset.workspaceId; // Get workspaceId from the row
 
-    startTimerOnClockify(projectId, taskId, startTime, description, workspaceId) // Pass workspaceId to startTimerOnClockify
-        .then(() => console.log('Timer started on Clockify'))
+    console.log(`Starting timer for User ID: ${UserId}, Workspace ID: ${workspaceId}`);
+    console.log('Row dataset before starting:', JSON.stringify(row.dataset));
+
+    startTimerOnClockify(projectId, taskId, startTime, description, workspaceId,UserId)
+        .then(timeEntryId => {
+            console.log('Timer started on Clockify');
+            row.dataset.timeEntryId = timeEntryId; // Store the time entry ID in the row's dataset
+            row.dataset.UserId = UserId; // Store the UserId in the row's dataset
+            console.log('Row dataset after starting:', JSON.stringify(row.dataset));
+        })
         .catch(error => console.error('Error starting timer on Clockify:', error));
+
     clearInterval(timerInterval);
     // Set up a new interval to update the timer display every second
     timerInterval = setInterval(() => {
@@ -250,11 +280,8 @@ async function startTimer(row) {
     }, 1000);
 }
 
-
-
-async function startTimerOnClockify(projectId, taskId, startTime,description,workspaceId) {
+async function startTimerOnClockify(projectId, taskId, startTime, description, workspaceId) {
     try {
-
         const response = await fetch(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/time-entries`, {
             method: 'POST',
             headers: {
@@ -274,10 +301,14 @@ async function startTimerOnClockify(projectId, taskId, startTime,description,wor
         if (!response.ok) {
             throw new Error('Failed to start timer on Clockify');
         }
+
+        const responseData = await response.json();
+        return responseData.id; // Return the ID of the created time entry
     } catch (error) {
         throw error;
     }
 }
+
 function formatElapsedTime(elapsedTime) {
     // Convert elapsed time in milliseconds to hours, minutes, and seconds
     const hours = Math.floor(elapsedTime / 3600000);
@@ -290,37 +321,12 @@ function formatElapsedTime(elapsedTime) {
     return formattedTime;
 }
 
-async function stopTimer(row) {
-    const startButton = row.querySelector('.start');
-    const stopButton = row.querySelector('.stop');
-    const stopTime = new Date();
-
-    startButton.style.display = 'inline-block';
-    stopButton.style.display = 'none';
-
-    const startTime = parseInt(row.dataset.startTime);
-    const elapsedTime = stopTime.getTime() - startTime;
-    const formattedTime = formatElapsedTime(elapsedTime);
-
-    // Update the timer display
-    updateTimerDisplay(row, elapsedTime);
-
-    // Fetch workspaceId and userId from the row
-    const workspaceId = row.dataset.workspaceId;
-    const userId = row.dataset.userId;
-
-    // Stop the timer on Clockify
-    await stopTimerOnClockify(workspaceId, userId, stopTime);
-
-    console.log('Timer stopped');
-}
-
 
 function updateTimerDisplay(row, elapsedTime) {
     // Convert elapsed time in milliseconds to hours, minutes, and seconds
-    const hours = Math.floor(elapsedTime / 3600000);
-    const minutes = Math.floor((elapsedTime % 3600000) / 60000);
-    const seconds = Math.floor((elapsedTime % 60000) / 1000);
+    let hours = Math.floor(elapsedTime / 3600000);
+    let minutes = Math.floor((elapsedTime % 3600000) / 60000);
+    let seconds = Math.floor((elapsedTime % 60000) / 1000);
 
     // Format the time components as HH:MM:SS
     const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -330,29 +336,69 @@ function updateTimerDisplay(row, elapsedTime) {
     timerDisplay.textContent = formattedTime;
 }
 
+async function stopTimer(row) {
+    let startButton = row.querySelector('.start');
+    let stopButton = row.querySelector('.stop');
+    let stopTime = new Date();
 
-async function stopTimerOnClockify(workspaceId, userId, stopTime) {
+    startButton.style.display = 'inline-block';
+    stopButton.style.display = 'none';
+
+    let startTime = parseInt(row.dataset.startTime);
+    let elapsedTime = stopTime.getTime() - startTime;
+    let formattedTime = formatElapsedTime(elapsedTime);
+
+    // Update the timer display
+    updateTimerDisplay(row, elapsedTime);
+
+    // Clear the interval responsible for updating the timer display
+    clearInterval(timerInterval);
+
+    // Fetch workspaceId, timeEntryId, and UserId from the row
+    const workspaceId = row.dataset.workspaceId;
+    const timeEntryId = row.dataset.timeEntryId;
+    const UserId = row.dataset.UserId;
+    console.log('Workspace ID:', workspaceId);
+    console.log('Time Entry ID:', timeEntryId);
+    console.log('User ID:', UserId);
+
+    // Check if UserId and timeEntryId are defined
+    if (!UserId || !timeEntryId) {
+        console.error('User ID or Time Entry ID is not defined in the row dataset');
+        return;
+    }
+
+    // Stop the timer on Clockify
+    await stopTimerOnClockify(workspaceId, UserId, timeEntryId, stopTime);
+}
+
+async function stopTimerOnClockify(workspaceId, UserId, timeEntryId, endTime) {
     try {
-        const response = await fetch(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/user/${userId}/time-entries`, {
+        const response = await fetch(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/user/${UserId}/time-entries`, {
             method: 'PATCH',
             headers: {
                 'X-Api-Key': apiKey,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                end: stopTime.toISOString()
+                end: endTime.toISOString() // Set the end time for the time entry
             })
         });
 
         if (!response.ok) {
-            throw new Error('Failed to stop timer on Clockify');
+            if (response.status === 404) {
+                console.log('Time entry not found or already stopped.');
+                return; // No need to throw an error, as this is a common scenario
+            } else {
+                throw new Error('Failed to stop timer on Clockify');
+            }
         }
+
+        console.log('Timer stopped on Clockify');
     } catch (error) {
-        console.error('Error stopping timer on Clockify:', error);
+        throw error;
     }
 }
-
-
 document.getElementById('Data').addEventListener('submit', async function(event) {
     event.preventDefault();
 
@@ -390,7 +436,8 @@ document.getElementById('Data').addEventListener('submit', async function(event)
             console.log('Response:', responseData);
             if (responseData.status === 'success') {
                 console.log('Task added successfully:', responseData.message);
-                fetchTasksFromServer();
+                // Add the newly added task to the table immediately
+                addTaskRow(data, workspaceId, UserId);
             } else {
                 console.error('Error adding task:', responseData.message);
             }
@@ -399,7 +446,6 @@ document.getElementById('Data').addEventListener('submit', async function(event)
             console.error('Error submitting form data:', error);
         });
 });
-
 
 document.addEventListener('DOMContentLoaded', function() {
     fetchTasksFromServer();
@@ -426,7 +472,7 @@ async function fetchTasksFromServer() {
                 throw new Error('Tasks is not an array');
             }
             tasks.forEach(task => {
-                addTaskRow(task, workspaceId); // Pass workspaceId to addTaskRow
+                addTaskRow(task, workspaceId, UserId); // Pass workspaceId and UserId to addTaskRow
             });
         })
         .catch(error => {
