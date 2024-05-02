@@ -139,6 +139,8 @@ async function addTaskRow(task, workspaceId, UserId) {
         newRow.dataset.clockifyTaskId = task.clockify_task_id;
         newRow.dataset.workspaceId = workspaceId;
         newRow.dataset.UserId = UserId;
+        newRow.dataset.description = task.description || '';
+
         newRow.innerHTML = `
             <td><input type="date" name="date_created" value="${dateCreated}" style="border: none;"></td>
             <td><select name="project">
@@ -150,21 +152,24 @@ async function addTaskRow(task, workspaceId, UserId) {
             <td><input type="text" name="description" value="${task.description || ''}"></td>
             <td><button class="up">↑</button><button class="down">↓</button></td>
             <td><input type="date" name="due_date" value="${dueDate}" style="border: none;"></td>
-            <td><select name="priority">
-                <option value="1">High</option>
-                <option value="2">Normal</option>
-                <option value="3">Low</option>
-            </select></td>
+            <td>
+        <select name="priority" onchange="updateTaskPriority(this)">
+            <option value="1">High</option>
+            <option value="2">Normal</option>
+            <option value="3">Low</option>
+        </select>
+    </td>
+
             <td><select name="created_by">
                 <option value="${UserId}">${userName}</option>
             </select></td>
             <td><select name="assigned_to">
                 <option value="${UserId}">${userName}</option>
             </select></td>
-            <td><select name="task-status">
-                <option value="In Progress">In Progress</option>
-                <option value="Completed">Completed</option>
-                <option value="Review">Review</option>
+            <td><select name="task-status" onchange="updateTaskStatus(this)">
+                <option value="1">In Progress</option>
+                <option value="2">Completed</option>
+                <option value="3">Review</option>
             </select></td>
             <td class="timer"><div><button class="start">Start</button><button class="stop" style="display: none;">Stop</button></div></td>
             <td class="timer-display">00:00:00</td>
@@ -446,6 +451,88 @@ document.getElementById('Data').addEventListener('submit', async function(event)
             console.error('Error submitting form data:', error);
         });
 });
+
+// Task PRIORITY UPDATE FUNCTION
+function updateTaskPriority(selectElement) {
+    const selectedPriorityId = selectElement.value; // Get the selected priority ID
+    const selectedPriorityName = selectElement.options[selectElement.selectedIndex].text; // Get the selected priority name
+    const row = selectElement.closest('tr'); // Find the closest row
+    const taskId = row.dataset.clockifyTaskId; // Retrieve the task ID from the row dataset
+    const projectId = row.dataset.clockifyProjectId; // Retrieve the project ID from the row dataset
+    const description = row.dataset.description; // Retrieve the description from the row dataset
+
+    // Log the data before sending the AJAX request
+    console.log('Task ID:', taskId);
+    console.log('Project ID:', projectId);
+    console.log('Description:', description);
+    console.log('Priority ID:', selectedPriorityId);
+    console.log('Priority Name:', selectedPriorityName);
+
+    // Send an AJAX request to update the task priority
+    fetch('database.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            taskId: taskId,
+            projectId: projectId,
+            description: description,
+            priorityId: selectedPriorityId,
+            priorityName: selectedPriorityName // Pass the priority name
+        })
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to update task priority');
+            }
+            console.log('Task priority updated successfully');
+        })
+        .catch(error => {
+            console.error('Error updating task priority:', error);
+        });
+}
+
+// Task STATUS UPDATE FUNCTION
+function updateTaskStatus(selectElement) {
+    const selectedStatusId = selectElement.value; // Get the selected status ID
+    const selectedStatusName = selectElement.options[selectElement.selectedIndex].text; // Get the selected status name
+    const row = selectElement.closest('tr'); // Find the closest row
+    const taskId = row.dataset.clockifyTaskId; // Retrieve the task ID from the row dataset
+    const projectId = row.dataset.clockifyProjectId; // Retrieve the project ID from the row dataset
+    const description = row.dataset.description; // Retrieve the description from the row dataset
+
+    // Log the data before sending the AJAX request
+    console.log('Task ID:', taskId);
+    console.log('Project ID:', projectId);
+    console.log('Description:', description);
+    console.log('Status ID:', selectedStatusId);
+    console.log('Status Name:', selectedStatusName);
+
+    // Send an AJAX request to update the task status
+    fetch('database.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            taskId: taskId,
+            projectId: projectId,
+            description: description,
+            statusId: selectedStatusId,
+            statusName: selectedStatusName // Pass the status name
+        })
+    })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to update task status');
+            }
+            console.log('Task status updated successfully');
+        })
+        .catch(error => {
+            console.error('Error updating task status:', error);
+        });
+}
 
 document.addEventListener('DOMContentLoaded', function() {
     fetchTasksFromServer();
