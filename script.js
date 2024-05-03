@@ -10,8 +10,7 @@ const workspaceId = '66016daed4084c6ca1059c4b';
 
 const projectDropdown = document.getElementById('project');
 const taskDropdown = document.getElementById('tasks');
-const userDropdown = document.getElementById('user');
-
+document.getElementById('user');
 function fetchProjects() {
     fetch(`https://api.clockify.me/api/v1/workspaces/${workspaceId}/projects/`, {
         method: 'GET',
@@ -371,9 +370,8 @@ async function stopTimer(row) {
 
     let startTime = parseInt(row.dataset.startTime);
     let elapsedTime = stopTime.getTime() - startTime;
-    let formattedTime = formatElapsedTime(elapsedTime);
-
-    // Update the timer display
+    formatElapsedTime(elapsedTime);
+// Update the timer display
     updateTimerDisplay(row, elapsedTime);
 
     // Clear the interval responsible for updating the timer display
