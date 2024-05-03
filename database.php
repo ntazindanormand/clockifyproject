@@ -86,15 +86,18 @@ function updateTaskStatus($db, $taskId, $statusId, $statusName, $projectId, $des
         return false; // Failure
     }
 }
-
 // Function to update task priority
 function updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId, $description): bool {
     try {
         // Log the Task ID to be updated
         error_log('Task ID to be updated: ' . $taskId);
 
-        // Prepare SQL statement to update task priority ID
-        $stmt = $db->prepare('UPDATE task SET task_priority_id = :priorityId WHERE clockify_task_id = :taskId AND clockify_project_id = :projectId AND description = :description');
+        // Prepare SQL statement to update task priority ID and name
+        $stmt = $db->prepare('UPDATE task 
+                              SET task_priority_id = :priorityId 
+                              WHERE clockify_task_id = :taskId 
+                              AND clockify_project_id = :projectId 
+                              AND description = :description');
 
         if (!$stmt) {
             throw new Exception('Failed to prepare statement to update task priority');
@@ -105,8 +108,9 @@ function updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId
         $stmt->bindParam(':taskId', $taskId);
         $stmt->bindParam(':projectId', $projectId);
         $stmt->bindParam(':description', $description);
+        $stmt->bindParam(':priorityName', $priorityName);
 
-        // Execute statement
+        // Execute statement to update task_priority_id
         if (!$stmt->execute()) {
             throw new Exception('Failed to execute statement to update task priority ID');
         } else {
@@ -114,22 +118,28 @@ function updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId
             error_log('Task priority ID updated successfully');
         }
 
-        // Prepare SQL statement to update task priority name
-        $updatePriorityStmt = $db->prepare('UPDATE task_priority SET name = :priorityName WHERE id = :priorityId');
-        if (!$updatePriorityStmt) {
-            throw new Exception('Failed to prepare statement to update task priority name');
-        }
+        // If priorityName is provided, update task_priority name directly
+        if ($priorityName !== null) {
+            // Prepare SQL statement to update task priority name directly
+            $updatePriorityNameStmt = $db->prepare('UPDATE task_priority 
+                                        SET name = :priorityName 
+                                        WHERE id = (SELECT task_priority_id FROM task WHERE clockify_task_id = :taskId)');
 
-        // Bind parameters
-        $updatePriorityStmt->bindParam(':priorityName', $priorityName);
-        $updatePriorityStmt->bindParam(':priorityId', $priorityId);
+            if (!$updatePriorityNameStmt) {
+                throw new Exception('Failed to prepare statement to update task priority name');
+            }
 
-        // Execute statement
-        if (!$updatePriorityStmt->execute()) {
-            throw new Exception('Failed to execute statement to update task priority name');
-        } else {
-            // Log success message
-            error_log('Task priority name updated successfully');
+// Bind parameters
+            $updatePriorityNameStmt->bindParam(':priorityName', $priorityName);
+            $updatePriorityNameStmt->bindParam(':taskId', $taskId);
+
+// Execute statement to update task_priority name directly
+            if (!$updatePriorityNameStmt->execute()) {
+                throw new Exception('Failed to execute statement to update task priority name');
+            } else {
+                // Log success message
+                error_log('Task priority name updated successfully');
+            }
         }
 
         return true; // Success
@@ -225,17 +235,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $result = $checkPriorityStmt->execute();
             $priorityExists = false;
 
-// Fetch the result as an associative array
+            // Fetch the result as an associative array
             $row = $result->fetchArray(SQLITE3_ASSOC);
 
-// If $row is not null, then the priority exists
+            // If $row is not null, then the priority exists
             if ($row !== false) {
                 $priorityExists = true;
             }
 
             // If the priority doesn't exist, insert it with a null name
             if (!$priorityExists) {
-                $insertPriorityStmt = $db->prepare('INSERT INTO task_priority (id, name) VALUES (:priorityId, NULL)');
+                $insertPriorityStmt = $db->prepare('INSERT INTO task_priority (id, name) VALUES (:priorityId, :priorityName)');
                 if (!$insertPriorityStmt) {
                     throw new Exception('Failed to prepare statement to insert priority');
                 }
@@ -287,4 +297,3 @@ if ($_SERVER["REQUEST_METHOD"] == "GET") {
     }
     exit;
 }
-
