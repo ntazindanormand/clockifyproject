@@ -33,15 +33,13 @@ function getProjectName($projectId, $db) {
     $result = $db->querySingle($query);
     return $result ?: 'Unknown Project';
 }
-
 // Function to update task status
-function updateTaskStatus($db, $taskId, $statusId, $statusName, $projectId, $description): bool {
+function updateTaskStatus($db, $taskId, $statusId, $statusName): bool {
     try {
-        // Log the Task ID to be updated
-        error_log('Task ID to be updated: ' . $taskId);
-
-        // Prepare SQL statement to update task status ID
-        $stmt = $db->prepare('UPDATE task SET task_status_id = :statusId WHERE clockify_task_id = :taskId AND clockify_project_id = :projectId AND description = :description');
+        // Prepare SQL statement to update task status ID and name
+        $stmt = $db->prepare('UPDATE task 
+                              SET task_status_id = :statusId 
+                              WHERE clockify_task_id = :taskId');
 
         if (!$stmt) {
             throw new Exception('Failed to prepare statement to update task status');
@@ -50,33 +48,37 @@ function updateTaskStatus($db, $taskId, $statusId, $statusName, $projectId, $des
         // Bind parameters
         $stmt->bindParam(':statusId', $statusId);
         $stmt->bindParam(':taskId', $taskId);
-        $stmt->bindParam(':projectId', $projectId);
-        $stmt->bindParam(':description', $description);
 
-        // Execute statement
+        // Execute statement to update task_status_id
         if (!$stmt->execute()) {
-            throw new Exception('Failed to execute statement to update task status ID');
+            throw new Exception('Failed to execute statement to update task status');
         } else {
             // Log success message
-            error_log('Task status ID updated successfully');
+            error_log('Task status updated successfully');
         }
 
-        // Prepare SQL statement to update task status name
-        $updateStatusStmt = $db->prepare('UPDATE task_status SET name = :statusName WHERE id = :statusId');
-        if (!$updateStatusStmt) {
-            throw new Exception('Failed to prepare statement to update task status name');
-        }
+        // If statusName is provided and not empty, update task_status name directly
+        if ($statusName !== null && !empty($statusName)) {
+            // Prepare SQL statement to update task status name directly
+            $updateStatusNameStmt = $db->prepare('UPDATE task_status 
+                                        SET name = :statusName 
+                                        WHERE id = :statusId');
 
-        // Bind parameters
-        $updateStatusStmt->bindParam(':statusName', $statusName);
-        $updateStatusStmt->bindParam(':statusId', $statusId);
+            if (!$updateStatusNameStmt) {
+                throw new Exception('Failed to prepare statement to update task status name');
+            }
 
-        // Execute statement
-        if (!$updateStatusStmt->execute()) {
-            throw new Exception('Failed to execute statement to update task status name');
-        } else {
-            // Log success message
-            error_log('Task status name updated successfully');
+            // Bind parameters
+            $updateStatusNameStmt->bindParam(':statusName', $statusName);
+            $updateStatusNameStmt->bindParam(':statusId', $statusId);
+
+            // Execute statement to update task_status name directly
+            if (!$updateStatusNameStmt->execute()) {
+                throw new Exception('Failed to execute statement to update task status name');
+            } else {
+                // Log success message
+                error_log('Task status name updated successfully');
+            }
         }
 
         return true; // Success
@@ -86,6 +88,7 @@ function updateTaskStatus($db, $taskId, $statusId, $statusName, $projectId, $des
         return false; // Failure
     }
 }
+
 // Function to update task priority
 function updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId, $description): bool {
     try {
@@ -108,7 +111,6 @@ function updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId
         $stmt->bindParam(':taskId', $taskId);
         $stmt->bindParam(':projectId', $projectId);
         $stmt->bindParam(':description', $description);
-        $stmt->bindParam(':priorityName', $priorityName);
 
         // Execute statement to update task_priority_id
         if (!$stmt->execute()) {
@@ -118,7 +120,7 @@ function updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId
             error_log('Task priority ID updated successfully');
         }
 
-        // If priorityName is provided, update task_priority name directly
+        // If priorityName is provided, update task priority name directly
         if ($priorityName !== null) {
             // Prepare SQL statement to update task priority name directly
             $updatePriorityNameStmt = $db->prepare('UPDATE task_priority 
@@ -129,11 +131,11 @@ function updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId
                 throw new Exception('Failed to prepare statement to update task priority name');
             }
 
-// Bind parameters
+            // Bind parameters
             $updatePriorityNameStmt->bindParam(':priorityName', $priorityName);
             $updatePriorityNameStmt->bindParam(':taskId', $taskId);
 
-// Execute statement to update task_priority name directly
+            // Execute statement to update task_priority name directly
             if (!$updatePriorityNameStmt->execute()) {
                 throw new Exception('Failed to execute statement to update task priority name');
             } else {
@@ -149,7 +151,6 @@ function updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId
         return false; // Failure
     }
 }
-
 // Handle POST requests
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Process JSON input
@@ -171,7 +172,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         // Connect to the database
         $db = connectDatabase();
 
-        if (isset($form_data['taskId']) && isset($form_data['priorityId']) && isset($form_data['projectId']) && isset($form_data['description']) && isset($form_data['priorityName'])) {
+        if (isset($form_data['taskId']) && isset($form_data['statusId']) && isset($form_data['statusName'])) {
+            // Update task status
+            $taskId = $form_data['taskId'];
+            $statusId = $form_data['statusId'];
+            $statusName = $form_data['statusName'];
+
+            // Log received data
+            error_log('Received Task ID: ' . $taskId);
+            error_log('Received Status ID: ' . $statusId);
+            error_log('Received Status Name: ' . $statusName);
+
+            // Update task status
+            if (updateTaskStatus($db, $taskId, $statusId, $statusName)) {
+                // Send success response
+                echo json_encode(['status' => 'success', 'message' => 'Task status updated successfully']);
+            } else {
+                throw new Exception('Failed to update task status');
+            }
+        } elseif (isset($form_data['taskId']) && isset($form_data['priorityId']) && isset($form_data['projectId']) && isset($form_data['description']) && isset($form_data['priorityName'])) {
             // Update task priority
             $taskId = $form_data['taskId'];
             $priorityId = $form_data['priorityId'];
@@ -193,7 +212,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             } else {
                 throw new Exception('Failed to update task priority');
             }
-
         } else {
             // Prepare SQL statement for task insertion
             $taskStmt = $db->prepare('INSERT INTO task (description, date_created, due_date, task_priority_id, created_by, assigned_to, sort_order, task_status_id, clockify_project_id, clockify_task_id, clockify_workspace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
@@ -209,11 +227,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             $taskStmt->bindValue(1, $form_data['description']);
             $taskStmt->bindValue(2, $form_data['date_created']);
             $taskStmt->bindValue(3, $form_data['due_date']);
-            $taskStmt->bindValue(4, $form_data['task_priority_id']); // Use the priority ID from form data
+            $taskStmt->bindValue(4, $form_data['task_priority_id']);
             $taskStmt->bindValue(5, $form_data['created_by']);
             $taskStmt->bindValue(6, $form_data['assigned_to']);
-            $taskStmt->bindValue(7, $newSortOrder); // Use the new sort order
-            //  $taskStmt->bindValue(8, $form_data['task_status_id']);
+            $taskStmt->bindValue(7, $newSortOrder);
+            $taskStmt->bindValue(8, $form_data['task_status_id']);
             $taskStmt->bindValue(9, $form_data['clockify_project_id']);
             $taskStmt->bindValue(10, $form_data['clockify_task_id']);
             $taskStmt->bindValue(11, $form_data['clockify_workspace_id']);
