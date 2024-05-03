@@ -520,7 +520,7 @@ function updateTaskStatus(selectElement) {
             projectId: projectId,
             description: description,
             statusId: selectedStatusId,
-            statusName: selectedStatusName // Pass the status name
+            statusName: selectedStatusName
         })
     })
         .then(response => {

@@ -244,6 +244,38 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Fetch the last inserted row ID
             $taskId = $db->lastInsertRowID();
 
+            // Check if task status exists
+            $statusId = $form_data['task_status_id'];
+            $checkStatusStmt = $db->prepare('SELECT id FROM task_status WHERE id = :statusId');
+            if (!$checkStatusStmt) {
+                throw new Exception('Failed to prepare statement to check task status existence');
+            }
+            $checkStatusStmt->bindParam(':statusId', $statusId);
+            $result = $checkStatusStmt->execute();
+            $statusExists = false;
+
+            // Fetch the result as an associative array
+            $row = $result->fetchArray(SQLITE3_ASSOC);
+
+            // If $row is not null, then the status exists
+            if ($row !== false) {
+                $statusExists = true;
+            }
+
+            // If the status doesn't exist, insert it with a null name
+            if (!$statusExists) {
+                $insertStatusStmt = $db->prepare('INSERT INTO task_status (id, name) VALUES (:statusId, :statusName)');
+                if (!$insertStatusStmt) {
+                    throw new Exception('Failed to prepare statement to insert task status');
+                }
+                $insertStatusStmt->bindParam(':statusId', $statusId);
+                $insertStatusStmt->bindParam(':statusName', $form_data['statusName']);
+                if (!$insertStatusStmt->execute()) {
+                    throw new Exception('Failed to insert task status');
+                }
+            }
+
+            // Check if task priority exists
             $priorityId = $form_data['task_priority_id'];
             $checkPriorityStmt = $db->prepare('SELECT id FROM task_priority WHERE id = :priorityId');
             if (!$checkPriorityStmt) {
@@ -268,6 +300,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                     throw new Exception('Failed to prepare statement to insert priority');
                 }
                 $insertPriorityStmt->bindParam(':priorityId', $priorityId);
+                $insertPriorityStmt->bindParam(':priorityName', $form_data['priorityName']);
                 if (!$insertPriorityStmt->execute()) {
                     throw new Exception('Failed to insert priority');
                 }
