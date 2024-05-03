@@ -325,6 +325,26 @@ function formatElapsedTime(elapsedTime) {
 
     return formattedTime;
 }
+// check box for completed tasks
+document.addEventListener("DOMContentLoaded", function() {
+    const showCompletedCheckbox = document.getElementById("show-completed-checkbox");
+
+    showCompletedCheckbox.addEventListener("change", function() {
+        const rows = document.querySelectorAll(".task-table tbody tr");
+
+        rows.forEach(function(row) {
+            const taskStatusCell = row.querySelector("td:nth-child(10)"); // Assuming task status is in the 10th column
+            if (taskStatusCell) {
+                const isCompleted = taskStatusCell.textContent.trim().toLowerCase() === "completed";
+                if (showCompletedCheckbox.checked && !isCompleted) {
+                    row.style.display = "none";
+                } else {
+                    row.style.display = "";
+                }
+            }
+        });
+    });
+});
 
 
 function updateTimerDisplay(row, elapsedTime) {
@@ -520,7 +540,7 @@ function updateTaskStatus(selectElement) {
             projectId: projectId,
             description: description,
             statusId: selectedStatusId,
-            statusName: selectedStatusName
+            statusName: selectedStatusName // Pass the status name
         })
     })
         .then(response => {

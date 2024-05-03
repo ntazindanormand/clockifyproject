@@ -38,8 +38,9 @@
 
             <button type="submit" id="addTaskBtn">ADD TASK</button>
             <label for="show-completed">
-                <input type="checkbox" name="show-completed" id="show-completed"> Show Completed Tasks
+                <input type="checkbox" name="show-completed" id="show-completed-checkbox"> Show Completed Tasks
             </label>
+
 
             <label for="assigned-tasks">
                 <input type="checkbox" name="assigned-tasks" id="assigned-tasks"> Tasks Assigned to Me
