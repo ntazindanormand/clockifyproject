@@ -67,9 +67,6 @@ function fetchUsers() {
             const option = new Option(user.name, user.id);
             userDropdown.add(option);
 
-            // Handle additional logic related to the user data here
-
-            // Add other logic as needed
         })
         .catch(error => console.error('Error fetching user:', error));
 }

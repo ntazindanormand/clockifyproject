@@ -58,7 +58,7 @@ function updateTaskStatus($db, $taskId, $statusId, $statusName): bool {
         }
 
         // If statusName is provided and not empty, update task_status name directly
-        if ($statusName !== null && !empty($statusName)) {
+        if (!empty($statusName)) {
             // Prepare SQL statement to update task status name directly
             $updateStatusNameStmt = $db->prepare('UPDATE task_status 
                                         SET name = :statusName 
@@ -88,7 +88,6 @@ function updateTaskStatus($db, $taskId, $statusId, $statusName): bool {
         return false; // Failure
     }
 }
-
 // Function to update task priority
 function updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId, $description): bool {
     try {
@@ -151,6 +150,7 @@ function updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId
         return false; // Failure
     }
 }
+
 // Handle POST requests
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     // Process JSON input
@@ -206,7 +206,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             error_log('Received priorityName: ' .$priorityName);
 
             // Update task priority
-            if (updateTaskPriority($db, $taskId, $priorityId, $priorityName, $projectId, $description)) {
+            if (updateTaskPriority($db, $taskId, $priorityId,$priorityName, $projectId, $description)) {
                 // Send success response
                 echo json_encode(['status' => 'success', 'message' => 'Task priority updated successfully']);
             } else {
