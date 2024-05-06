@@ -1,5 +1,3 @@
-
-
 /* Task header styling */
 .task-header {
     margin: 0;
@@ -19,9 +17,10 @@
 
 /* UI table styling */
 .task-table-container {
-    width: 90%;
-    margin: 20px auto;
+    width: 100%; /* Change width to 100% to make it span the full width of the page */
+    margin: 20px 0; /* Adjust margin to 20px top and bottom, 0 left and right */
     border-radius: 10px;
+    overflow-x: auto; /* Add horizontal scrollbar if content overflows */
 }
 
 .task-table {
